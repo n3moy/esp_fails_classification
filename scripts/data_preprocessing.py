@@ -8,13 +8,12 @@ import seaborn as sns
 
 
 
-def get_events_summary(PATH, do_plot=False):
+def get_events_summary(PATH: str, do_plot: bool=False) -> pd.DataFrame:
     """
-    Collects "eventsData.csv" files from directory and joins all of them into one pd.DataFrame
+    Collects "eventsData.csv" files from parent directory and joins all of them into one pd.DataFrame
     
     """
-    wells_ = [1, 4, 7, 8]
-    # wells_ = [1, 2, 3, 6, 7, 8]
+    wells_ = [1, 2, 3, 6, 7, 8]
 
     files = {}
     events_summary = pd.DataFrame()
@@ -26,7 +25,6 @@ def get_events_summary(PATH, do_plot=False):
             for filename in filenames:
                 if filename in files:
                     files[filename] += 1
-                    # files[filename][1].append(dirname)
                 else:
                     files[filename] = 1
                 
@@ -35,12 +33,10 @@ def get_events_summary(PATH, do_plot=False):
                     if filename in files:
                         events = pd.read_csv(os.path.join(dirname, filename), parse_dates=["startDate", "endDate"])
                         events = events[(events["event"] != "Апробация правила")]
-                        # events = events[events["ruleName"] != "new_rule"]
                         events["losses"] = events["losses"].apply(lambda x: np.float16(x.replace(",", ".")))
                         events["well_id"] = i
 
                     events_summary = pd.concat([events_summary, events], axis=0)
-                    # print(f"Well {i} shape: {events.shape}")
 
     if do_plot:
         events_summary_plot = events_summary.copy()
@@ -56,7 +52,6 @@ def get_events_summary(PATH, do_plot=False):
         plt.xlabel("Месяц", fontdict={"size": 12})
         ax = plt.gca()
         ax.tick_params(axis = 'both', which = 'major', labelsize = 12)
-        # ax.tick_params(axis = 'both', which = 'minor', labelsize = 12)
         plt.xticks(rotation=30)
         plt.show()
     
@@ -98,7 +93,17 @@ def join_events_to_data(data_in: pd.DataFrame, events_in=None, well_id=None) -> 
 
 
 # Should be used after features renaming
-def join_data_v2(PATH, resample=True, verbose=False):
+def join_data_v2(PATH: str, resample=True, verbose=False) -> pd.DataFrame:
+    """
+    Takes all .csv files with 2 columns in passed directory and joins them all into one pd.DataFrame based on 'time' index
+
+    All features are resampled with 2 min and interpolated in order to have smooth data without gaps
+
+    Should be used after features renaming
+    
+    """
+    # TODO -> 1) create folders structure to save intermediate results
+    # 2) Should be placed in common pipeline as step 2 in data preprocessing
 
     files = {}
     for dirname, _, filenames in os.walk(PATH):
@@ -149,13 +154,20 @@ def join_data_v2(PATH, resample=True, verbose=False):
     events = get_events_summary(PATH[:-3])
     full_data_events = join_events_to_data(full_data_pivot, events, well_id)
 
+    # TODO -> folders structure right here!!!
     full_data_pivot.to_csv(PATH+"\\full_data.csv")
     full_data_events.to_csv(PATH+"\\full_data_events.csv")
 
     return full_data_events
 
 
-def reduce_mem_usage(df, verbose=True):
+def reduce_mem_usage(df: pd.DataFrame, verbose=True):
+    """
+    Reduces pd.DataFrame memory usage based on columns types
+    
+    """
+    # TODO -> think about its place in the common pipeline
+
     numerics = ['int8','int16', 'int32', 'int64', 'float16', 'float32', 'float64']
     start_mem = df.memory_usage().sum() / 1024**2
 
@@ -190,6 +202,11 @@ def reduce_mem_usage(df, verbose=True):
 
 
 def check_nans(list_wells: list):
+    """
+    Literally checks NaNs in list of pd.DataFrame's 
+    Prints amount of NaNs by column
+    
+    """
     for well_data in list_wells:
         well_id = well_data["well"].unique()[0]
         cols = well_data.columns
@@ -204,9 +221,10 @@ def check_nans(list_wells: list):
 
 
 
-def split_data(data_in: pd.DataFrame):
+def split_data(data_in: pd.DataFrame) -> pd.DataFrame:
     """
-    Function filters data based on vizualization 
+    Function filters data based on adequancy of the data
+    Based on vizualization and my personal experience some data looks bad due to mistakes, gaps and working regime differences
     
     """
     data = data_in.copy()
@@ -242,14 +260,17 @@ def split_data(data_in: pd.DataFrame):
             ]
         data_out = pd.concat([data_out, data_temp], axis=0)
 
-    # data_out = data_out.reset_index().rename(columns={"index": "time"})
-
     return data_out
 
 
-def del_z_outliers(data_in: pd.DataFrame):
+def del_z_outliers(data_in: pd.DataFrame) -> pd.DataFrame:
+    """
+    Easiest approach to filter mistakes and outcasts in data
+    Uses 3 sigma rule to find outcasts and filters indecies where the observation is out of 3 std's
+    
+    """
     data = data_in.copy()
-    # data = data_out[data_out["event_id"] == 0]
+    # data = data_out[data_out["event_id"] == 0] Should I keep it?
     
     if data_in.index.dtype != np.int64:
         raise ValueError("Index type is not correct")
@@ -285,11 +306,13 @@ def del_z_outliers(data_in: pd.DataFrame):
 
 #TODO -> Donot remove the correlated fetures but use PCA to get only one out of them for each highly correlated group
 #TODO -> Обработка сигналов, какие преобразования еще можно ебнуть для токов
-def features_calculation(data_in: pd.DataFrame, cols_to_diff=None):
+def features_calculation(data_in: pd.DataFrame, cols_to_calc=None):
     """"
-    Calculating unbalances and differentiables of some features
+    Calculating unbalances, differentiables, statistics of operating parameters as new features
 
     """
+    # TODO -> 1) Place function in the common pipeline
+    # 2) Define and analyze all the statistics that is most suitable for prediction and logic
 
     data = data_in.copy()
     initial_cols = data.columns
@@ -316,11 +339,11 @@ def features_calculation(data_in: pd.DataFrame, cols_to_diff=None):
     data["current"] = data["op_current1"]
     data["resistance"] = np.where((data["current"] == 0), 0, data["voltage"].div(data["current"], axis=0))
 
-    # Calculating derivatives
-    if cols_to_diff is None:
-        cols_to_diff = ["current", "voltage", "active_power", "frequency", "electricity_gage", "motor_load", "pump_temperature"]
+    # Calculating derivatives and statictics
+    if cols_to_calc is None:
+        cols_to_calc = ["current", "voltage", "active_power", "frequency", "electricity_gage", "motor_load", "pump_temperature"]
 
-    for col in cols_to_diff:
+    for col in cols_to_calc:
         data[f"{col}_deriv"] = pd.Series(np.gradient(data[col]), data.index)
         data[f"{col}_rol_mean"] = data[col].rolling(min_periods=1, window=60*14*3).mean()
         data[f"{col}_rol_std"] = data[col].rolling(min_periods=1, window=60*14*3).std()
@@ -341,7 +364,7 @@ def features_calculation(data_in: pd.DataFrame, cols_to_diff=None):
 
 
 
-def check_oil_rate(data_in: pd.DataFrame, drop=False, impute=False, plot=False):
+def check_oil_rate(data_in: pd.DataFrame, drop=False, impute=False, plot=False) -> pd.DataFrame:
     """
     This function checks if oilrate higher than liquid rate.
     Depending on results we can drop oilrate column or impute liquid rate instead wrong values
@@ -398,6 +421,11 @@ def check_oil_rate(data_in: pd.DataFrame, drop=False, impute=False, plot=False):
 # This means the data sets we use in PM are almost always unbalanced.
 
 def expand_target(data_in: pd.DataFrame, target_window=7, split=False) -> pd.DataFrame:
+    """
+    Based on 'target_window' creates additional variable as target in advance to failure
+    For example if 'target_window'=7 -- all observations (rows) before failure in 7 days are signed as class '1' 
+    
+    """
     data = data_in.copy()
 
     if data.index.dtype != np.int64:
@@ -415,6 +443,7 @@ def expand_target(data_in: pd.DataFrame, target_window=7, split=False) -> pd.Dat
     data["time_to_failure"] = data["fail_range"] / np.timedelta64(1, "D")
     data.loc[data["failure_date"] == data["time"].max(), "time_to_failure"] = 999
 
+    # I use window between 7 and 3 days before failure
     data['failure_target'] = np.where(((data["time_to_failure"] <= target_window) & ((data["time_to_failure"] > 3))), 1, 0)
     data = data.drop(["failure_date", "fail_range"], axis=1)
     # data["stable"] = np.where(((data["time_to_failure"] >= 30) & (data["time_to_failure"] <= 90)), 1, 0)
@@ -432,9 +461,11 @@ def expand_target(data_in: pd.DataFrame, target_window=7, split=False) -> pd.Dat
 
 def join_data(list_data: list) -> pd.DataFrame:
     """"
-    This function joins wells_data into one pd.DataFrame
+    This function joins all datasets in 'list_data' into one pd.DataFrame and splits it in train and test
     
     """
+    # TODO -> 1) Should be used in the common pipeline data preprocessing as last step
+    # 2) Define the period where to test models
     all_data = list_data.copy()
     joined_df = pd.DataFrame(columns=all_data[0].columns)
 
@@ -453,9 +484,6 @@ def join_data(list_data: list) -> pd.DataFrame:
             (joined_df["time"].dt.date >= pd.Timestamp(f"2021-06-01")) & 
             (joined_df["time"].dt.date <= pd.Timestamp(f"2021-06-30"))
         )
-        # (
-        #     (joined_df["time"].dt.date <= pd.Timestamp(f"2021-07-01"))
-        # )
     ]
     print(f"Joined data shape : {joined_df.shape}")
     test_indices = test_df.index
