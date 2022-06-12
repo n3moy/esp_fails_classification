@@ -16,8 +16,8 @@ class preprocessing_pipeline:
         self.directory_to = directory_to
 
 
-    @classmethod
-    def _rename_features(input_data: pd.DataFrame, feature_name: str, *columns: list):
+    # @classmethod
+    def _rename_features(input_data: pd.DataFrame, feature_name: str, columns: list) -> pd.DataFrame:
 
         data_out = input_data.copy()
         new_name = ""
@@ -114,6 +114,7 @@ class preprocessing_pipeline:
             return self.raw_files_paths
 
 
+    # Takes about 4 mins to run
     def rename_features(self, verbose=False):
         self.renamed_files_paths = []
 
@@ -127,20 +128,19 @@ class preprocessing_pipeline:
                     if verbose:
                         print(f"Skipping file {filepath}\nFile has more than 2 columns")
                     continue
-                print(type(csv_file))
-                csv_file = preprocessing_pipeline._rename_features(csv_file, filename, cols)
-                path_to_save = self.directory_to + "\\renamed\\" + folder + "\\" + filename
+
+                csv_file = preprocessing_pipeline._rename_features(input_data=csv_file, feature_name=filename.split(".")[0], columns=cols)
+                path_to_save = self.directory_to + "renamed\\" + folder + "\\" + filename
                 if verbose:
                     print(f"Saving a file {filename} into directory\n{path_to_save}")
+
+                if not os.path.exists(path_to_save[:-len(filename)-1]):
+                    os.makedirs(path_to_save[:-len(filename)-1])
+
                 csv_file.to_csv(path_to_save)
                 tmp_filenames.append(filename)
                 tmp_filenames_paths.append(path_to_save)
 
             # This tuple has 3 items: 1) folder (aka well number), 2) filenames (aka op. parameters) in folder 3) complete paths for files inside folder
             self.renamed_files_paths.append((folder, tmp_filenames, tmp_filenames_paths))
-            
-
-
-    def data_process(self):
-        pass
 
