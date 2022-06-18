@@ -64,6 +64,9 @@ class preprocessing_pipeline:
         
         return out_data
 
+    def _find_common_features(self):
+        pass
+
     # Around 7 mins to calculate on 8 wells
     def join_data_by_well(self, resample=True):
         for folder, filenames, filepaths in self.renamed_files_paths:
@@ -183,10 +186,6 @@ class preprocessing_pipeline:
     
 
     def data_join_target(self):
-        pass
-
-
-    def find_common_features(self):
         pass
 
 
