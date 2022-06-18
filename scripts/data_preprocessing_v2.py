@@ -64,6 +64,8 @@ class preprocessing_pipeline:
         
         return out_data
 
+    def _find_common_features(self):
+        pass
 
     # Around 7 mins to calculate on 8 wells
     def join_data_by_well(self, resample=True):
