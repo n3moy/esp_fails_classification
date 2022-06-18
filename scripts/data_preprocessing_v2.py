@@ -1,11 +1,9 @@
-from fileinput import filename
 import os
 import pathlib
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.compose import ColumnTransformer
 from pandas.api.types import is_datetime64_any_dtype as is_datetime
 
 
@@ -19,6 +17,8 @@ class preprocessing_pipeline:
     def __init__(self, directory_from, directory_to):
         self.directory_from = directory_from
         self.directory_to = directory_to
+        self.renamed_files_paths = []
+        self.raw_files_paths = []
 
         if not self.directory_to.endswith("\\"):
             self.directory_to += "\\"
@@ -64,6 +64,7 @@ class preprocessing_pipeline:
         
         return out_data
 
+
     # Around 7 mins to calculate on 8 wells
     def join_data_by_well(self, resample=True):
         for folder, filenames, filepaths in self.renamed_files_paths:
@@ -88,7 +89,7 @@ class preprocessing_pipeline:
                 csv_file = csv_file.sort_values(by="time")
                 full_data = full_data.append(csv_file)
 
-            duplicates_indices =  full_data.duplicated(["time", "feature"], keep=False)
+            duplicates_indices =  full_data.duplicated(["time", "feature"], keep="first")
             full_data = full_data[~duplicates_indices]
             
             full_data_pivot = full_data.pivot(index="time", columns="feature", values="value")
@@ -98,6 +99,7 @@ class preprocessing_pipeline:
             if resample:
                 print("Resampling...")
                 full_data_pivot = full_data_pivot.resample("2Min").interpolate()
+                
             print("Joining events to dataset...")
             events_path = self.raw_files_paths[int(folder)-1][2]
             for f in events_path:
@@ -111,7 +113,8 @@ class preprocessing_pipeline:
             if not os.path.exists(path_to_save):
                 os.makedirs(path_to_save)
 
-            full_data_pivot["well"] = well_id
+            full_data_pivot["well_id"] = well_id
+
             full_data_pivot.to_csv(path_to_save + f"\\joined_data_{folder}.csv", index=False)
 
             print(f"Well #{folder} is saved to {path_to_save}")
@@ -125,7 +128,6 @@ class preprocessing_pipeline:
         """
 
         dirname, folders, _ = next(os.walk(self.directory_from))
-        self.raw_files_paths = []
 
         for folder in folders:
             if verbose:
@@ -144,8 +146,6 @@ class preprocessing_pipeline:
 
     # Takes about 4 mins to run 8 wells
     def rename_features(self, verbose=False):
-        self.renamed_files_paths = []
-
         for folder, filenames, filepaths in self.raw_files_paths:
             tmp_filenames = []
             tmp_filenames_paths = []
@@ -172,18 +172,6 @@ class preprocessing_pipeline:
 
             # This tuple has 3 items: 1) folder (aka well number), 2) filenames (aka op. parameters) in folder 3) complete paths for files inside folder
             self.renamed_files_paths.append((folder, tmp_filenames, tmp_filenames_paths))
-
-
-    def data_resampling(self):
-        pass
-
-
-    def data_join(self):
-        pass
-    
-
-    def data_join_target(self):
-        pass
 
 
     def find_common_features(self):
