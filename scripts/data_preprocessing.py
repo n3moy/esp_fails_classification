@@ -7,11 +7,10 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 
-
-def get_events_summary(PATH: str, do_plot: bool=False) -> pd.DataFrame:
+def get_events_summary(PATH: str, do_plot: bool = False) -> pd.DataFrame:
     """
     Collects "eventsData.csv" files from parent directory and joins all of them into one pd.DataFrame
-    
+
     """
     wells_ = [1, 2, 3, 6, 7, 8]
 
@@ -27,38 +26,53 @@ def get_events_summary(PATH: str, do_plot: bool=False) -> pd.DataFrame:
                     files[filename] += 1
                 else:
                     files[filename] = 1
-                
+
                 # Collecting events data
                 if filename in ["eventsData1.csv", "eventsData.csv"]:
                     if filename in files:
-                        events = pd.read_csv(os.path.join(dirname, filename), parse_dates=["startDate", "endDate"])
+                        events = pd.read_csv(
+                            os.path.join(dirname, filename),
+                            parse_dates=["startDate", "endDate"],
+                        )
                         events = events[(events["event"] != "Апробация правила")]
-                        events["losses"] = events["losses"].apply(lambda x: np.float16(x.replace(",", ".")))
+                        events["losses"] = events["losses"].apply(
+                            lambda x: np.float16(x.replace(",", "."))
+                        )
                         events["well_id"] = i
 
                     events_summary = pd.concat([events_summary, events], axis=0)
 
     if do_plot:
         events_summary_plot = events_summary.copy()
-        events_summary_plot["month_name"] = events_summary_plot["startDate"].dt.month_name()
-        events_summary_plot["month_year"] = events_summary_plot["month_name"] + "_" + events_summary_plot["startDate"].dt.year.astype(str)
+        events_summary_plot["month_name"] = events_summary_plot[
+            "startDate"
+        ].dt.month_name()
+        events_summary_plot["month_year"] = (
+            events_summary_plot["month_name"]
+            + "_"
+            + events_summary_plot["startDate"].dt.year.astype(str)
+        )
         events_summary_plot.sort_values(by="startDate", inplace=True)
-        month_group = events_summary_plot.groupby(["month_year", "event"], as_index=False, sort=False)["id"].count()
+        month_group = events_summary_plot.groupby(
+            ["month_year", "event"], as_index=False, sort=False
+        )["id"].count()
 
         plt.figure(figsize=(15, 10))
         sns.barplot(x="month_year", y="id", hue="event", data=month_group, alpha=0.7)
         plt.legend(loc="upper right")
-        plt.ylabel("Количество осложнений", fontdict={"size":12})
+        plt.ylabel("Количество осложнений", fontdict={"size": 12})
         plt.xlabel("Месяц", fontdict={"size": 12})
         ax = plt.gca()
-        ax.tick_params(axis = 'both', which = 'major', labelsize = 12)
+        ax.tick_params(axis="both", which="major", labelsize=12)
         plt.xticks(rotation=30)
         plt.show()
-    
+
     return events_summary
 
 
-def join_events_to_data(data_in: pd.DataFrame, events_in=None, well_id=None) -> pd.DataFrame:
+def join_events_to_data(
+    data_in: pd.DataFrame, events_in=None, well_id=None
+) -> pd.DataFrame:
     """
     This function assingns multiple events as marks into dataset based on startDate and endDate in events dataframe
 
@@ -71,7 +85,7 @@ def join_events_to_data(data_in: pd.DataFrame, events_in=None, well_id=None) -> 
     if events_in is None:
         PATH = "C:\\Users\\vladv\\predictiveAnalytics\\data\\"
         events_in = get_events_summary(PATH)
-        
+
     events = events_in.copy()
     events["startDate"] = pd.to_datetime(events["startDate"])
     events["endDate"] = pd.to_datetime(events["endDate"])
@@ -84,11 +98,11 @@ def join_events_to_data(data_in: pd.DataFrame, events_in=None, well_id=None) -> 
     out_data["event_id"] = 0
 
     for ev_id, (start_date, end_date) in zip(events_id, events_dates):
-        mask = ((out_data.index >= start_date) & (out_data.index <= end_date))
+        mask = (out_data.index >= start_date) & (out_data.index <= end_date)
         out_data.loc[mask, "event_id"] = ev_id
-    
+
     out_data = out_data.reset_index()
-    
+
     return out_data
 
 
@@ -100,7 +114,7 @@ def join_data_v2(PATH: str, resample=True, verbose=False) -> pd.DataFrame:
     All features are resampled with 2 min and interpolated in order to have smooth data without gaps
 
     Should be used after features renaming
-    
+
     """
     # TODO -> 1) create folders structure to save intermediate results
     # 2) Should be placed in common pipeline as step 2 in data preprocessing
@@ -119,13 +133,17 @@ def join_data_v2(PATH: str, resample=True, verbose=False) -> pd.DataFrame:
                 print(f"{filename} doesn't have 'time' column")
 
             files[filepath] = csv_file.shape[0]
-    
+
     files = sorted(files.items(), key=lambda x: x[1], reverse=True)
     full_data = pd.DataFrame(columns=["time", "value", "feature"])
 
     for path, shape in files:
 
-        csv_file = pd.read_csv(path, parse_dates=["time"]).drop_duplicates().sort_values(by="time")
+        csv_file = (
+            pd.read_csv(path, parse_dates=["time"])
+            .drop_duplicates()
+            .sort_values(by="time")
+        )
         cols = csv_file.columns
         feature_name = cols[1]
 
@@ -135,7 +153,7 @@ def join_data_v2(PATH: str, resample=True, verbose=False) -> pd.DataFrame:
         csv_file = csv_file.rename(columns={feature_name: "value"})
         csv_file["feature"] = feature_name
         full_data = full_data.append(csv_file)
-    
+
     duplicates = full_data.duplicated(["time", "feature"], keep=False)
 
     if verbose:
@@ -155,8 +173,8 @@ def join_data_v2(PATH: str, resample=True, verbose=False) -> pd.DataFrame:
     full_data_events = join_events_to_data(full_data_pivot, events, well_id)
 
     # TODO -> folders structure right here!!!
-    full_data_pivot.to_csv(PATH+"\\full_data.csv")
-    full_data_events.to_csv(PATH+"\\full_data_events.csv")
+    full_data_pivot.to_csv(PATH + "\\full_data.csv")
+    full_data_events.to_csv(PATH + "\\full_data_events.csv")
 
     return full_data_events
 
@@ -164,11 +182,11 @@ def join_data_v2(PATH: str, resample=True, verbose=False) -> pd.DataFrame:
 def reduce_mem_usage(df: pd.DataFrame, verbose=True):
     """
     Reduces pd.DataFrame memory usage based on columns types
-    
+
     """
     # TODO -> think about its place in the common pipeline
 
-    numerics = ['int8','int16', 'int32', 'int64', 'float16', 'float32', 'float64']
+    numerics = ["int8", "int16", "int32", "int64", "float16", "float32", "float64"]
     start_mem = df.memory_usage().sum() / 1024**2
 
     for col in df.columns:
@@ -178,7 +196,7 @@ def reduce_mem_usage(df: pd.DataFrame, verbose=True):
             c_min = df[col].min()
             c_max = df[col].max()
 
-            if str(col_type)[:3] == 'int':
+            if str(col_type)[:3] == "int":
                 if c_min > np.iinfo(np.int8).min and c_max < np.iinfo(np.int8).max:
                     df[col] = df[col].astype(np.int8)
                 elif c_min > np.iinfo(np.int16).min and c_max < np.iinfo(np.int16).max:
@@ -186,9 +204,12 @@ def reduce_mem_usage(df: pd.DataFrame, verbose=True):
                 elif c_min > np.iinfo(np.int32).min and c_max < np.iinfo(np.int32).max:
                     df[col] = df[col].astype(np.int32)
                 elif c_min > np.iinfo(np.int64).min and c_max < np.iinfo(np.int64).max:
-                    df[col] = df[col].astype(np.int64)  
+                    df[col] = df[col].astype(np.int64)
             else:
-                if c_min > np.finfo(np.float32).min and c_max < np.finfo(np.float32).max:
+                if (
+                    c_min > np.finfo(np.float32).min
+                    and c_max < np.finfo(np.float32).max
+                ):
                     df[col] = df[col].astype(np.float32)
                 else:
                     df[col] = df[col].astype(np.float64)
@@ -196,16 +217,20 @@ def reduce_mem_usage(df: pd.DataFrame, verbose=True):
     end_mem = df.memory_usage().sum() / 1024**2
 
     if verbose:
-        print('Mem. usage decreased to {:5.2f} Mb ({:.1f}% reduction)'.format(end_mem, 100 * (start_mem - end_mem) / start_mem))
- 
+        print(
+            "Mem. usage decreased to {:5.2f} Mb ({:.1f}% reduction)".format(
+                end_mem, 100 * (start_mem - end_mem) / start_mem
+            )
+        )
+
     return df
 
 
 def check_nans(list_wells: list):
     """
-    Literally checks NaNs in list of pd.DataFrame's 
+    Literally checks NaNs in list of pd.DataFrame's
     Prints amount of NaNs by column
-    
+
     """
     for well_data in list_wells:
         well_id = well_data["well"].unique()[0]
@@ -220,26 +245,26 @@ def check_nans(list_wells: list):
                     print(f"Feature {col} nans count : {nans}")
 
 
-
 def split_data(data_in: pd.DataFrame) -> pd.DataFrame:
     """
     Function filters data based on adequancy of the data
-    Based on vizualization and my personal experience some data looks bad due to mistakes, gaps and working regime differences
-    
+    Based on vizualization and my personal experience 
+    some data looks bad due to mistakes, gaps and working regime differences
+
     """
     data = data_in.copy()
 
     # This dict contains *from [day, month] *to [day, month] ranges of valid data based on vizualization
     wells_ranges = {
-        1: [[[15, 4], [1, 9]], [[11, 10], [31, 12]]], 
-        2: [[[1, 5], [1, 9]], [[16, 11], [31, 12]]], 
+        1: [[[15, 4], [1, 9]], [[11, 10], [31, 12]]],
+        2: [[[1, 5], [1, 9]], [[16, 11], [31, 12]]],
         3: [[[1, 7], [31, 12]]],
-        4: [[[1, 5], [31, 12]]],    # motor temperature is constant (impossible :( )
-        6: [[[1, 5], [31, 12]]]
+        4: [[[1, 5], [31, 12]]],  # motor temperature is constant (impossible :( )
+        6: [[[1, 5], [31, 12]]],
     }
-    
+
     well_id = data["well"].values[0].astype(int)
-    
+
     # This data is alright
     if well_id in [7, 8]:
         return data
@@ -250,13 +275,25 @@ def split_data(data_in: pd.DataFrame) -> pd.DataFrame:
     for dates in data_ranges:
         if data.index.dtype == np.int64:
             data_temp = data.loc[
-                (data["time"].dt.date >= pd.Timestamp(f"2021-{dates[0][1]}-{dates[0][0]}")) & 
-                (data["time"].dt.date <= pd.Timestamp(f"2021-{dates[1][1]}-{dates[1][0]}"))
+                (
+                    data["time"].dt.date
+                    >= pd.Timestamp(f"2021-{dates[0][1]}-{dates[0][0]}")
+                )
+                & (
+                    data["time"].dt.date
+                    <= pd.Timestamp(f"2021-{dates[1][1]}-{dates[1][0]}")
+                )
             ]
         else:
             data_temp = data.loc[
-                (data.index.to_series().dt.date >= pd.Timestamp(f"2021-{dates[0][1]}-{dates[0][0]}")) & 
-                (data.index.to_series().dt.date <= pd.Timestamp(f"2021-{dates[1][1]}-{dates[1][0]}"))
+                (
+                    data.index.to_series().dt.date
+                    >= pd.Timestamp(f"2021-{dates[0][1]}-{dates[0][0]}")
+                )
+                & (
+                    data.index.to_series().dt.date
+                    <= pd.Timestamp(f"2021-{dates[1][1]}-{dates[1][0]}")
+                )
             ]
         data_out = pd.concat([data_out, data_temp], axis=0)
 
@@ -266,18 +303,32 @@ def split_data(data_in: pd.DataFrame) -> pd.DataFrame:
 def del_z_outliers(data_in: pd.DataFrame) -> pd.DataFrame:
     """
     Easiest approach to filter mistakes and outcasts in data
-    Uses 3 sigma rule to find outcasts and filters indecies where the observation is out of 3 std's
-    
+    Uses 3 sigma rule to find outcasts and filters 
+    indecies where the observation is out of 3 std's
+
     """
     data = data_in.copy()
     # data = data_out[data_out["event_id"] == 0] Should I keep it?
-    
+
     if data_in.index.dtype != np.int64:
         raise ValueError("Index type is not correct")
 
     data = data.reset_index(drop=True)
     cols = data.columns
-    cols = [col for col in cols if col not in ["well", "event_id", "time", "event_before", "failure_target", "stable", "time_to_failure"]]
+    cols = [
+        col
+        for col in cols
+        if col
+        not in [
+            "well",
+            "event_id",
+            "time",
+            "event_before",
+            "failure_target",
+            "stable",
+            "time_to_failure",
+        ]
+    ]
     target_indices = data[data["failure_target"] == 1].index.tolist()
     shape_before = data.shape[0]
     out = []
@@ -289,8 +340,8 @@ def del_z_outliers(data_in: pd.DataFrame) -> pd.DataFrame:
 
         try:
             for i, value in enumerate(series_to_check):
-                z = (value-m)/sd
-                if np.abs(z) > 3 and i not in target_indices: 
+                z = (value - m) / sd
+                if np.abs(z) > 3 and i not in target_indices:
                     out.append(i)
         except ZeroDivisionError:
             print(f"Feature {col} is constant")
@@ -304,10 +355,10 @@ def del_z_outliers(data_in: pd.DataFrame) -> pd.DataFrame:
     return data
 
 
-#TODO -> Donot remove the correlated fetures but use PCA to get only one out of them for each highly correlated group
-#TODO -> Обработка сигналов, какие преобразования еще можно ебнуть для токов
+# TODO -> Donot remove the correlated fetures but use PCA to get only one out of them for each highly correlated group
+# TODO -> Обработка сигналов, какие преобразования еще можно ебнуть для токов
 def features_calculation(data_in: pd.DataFrame, cols_to_calc=None):
-    """"
+    """ "
     Calculating unbalances, differentiables, statistics of operating parameters as new features
 
     """
@@ -328,31 +379,68 @@ def features_calculation(data_in: pd.DataFrame, cols_to_calc=None):
     mean_current = currents.mean(axis=1)
     deviation_voltage = voltages.sub(mean_voltage, axis=0).abs()
     deviation_current = currents.sub(mean_current, axis=0).abs()
-    data["voltage_unbalance"] = deviation_voltage.max(axis=1).div(mean_voltage, axis=0) * 100
-    data["current_unbalance"] = deviation_current.max(axis=1).div(mean_current, axis=0) * 100
+    data["voltage_unbalance"] = (
+        deviation_voltage.max(axis=1).div(mean_voltage, axis=0) * 100
+    )
+    data["current_unbalance"] = (
+        deviation_current.max(axis=1).div(mean_current, axis=0) * 100
+    )
 
-    data["current_unbalance"] = data["current_unbalance"].fillna(0)                               # Impute zeros where currents are zeros
-    data["voltage_unbalance"] = data["voltage_unbalance"].fillna(0)                               # Impute zeros where voltages are zeros
+    data["current_unbalance"] = data["current_unbalance"].fillna(
+        0
+    )  # Impute zeros where currents are zeros
+    data["voltage_unbalance"] = data["voltage_unbalance"].fillna(
+        0
+    )  # Impute zeros where voltages are zeros
 
     # I don't need currents anymore, because active power represent variability of all currents (based on correlation matrix)
-    data["voltage"] = data["voltageAB"]                                                           # Lets keep only one voltage to save variability
+    data["voltage"] = data[
+        "voltageAB"
+    ]  # Lets keep only one voltage to save variability
     data["current"] = data["op_current1"]
-    data["resistance"] = np.where((data["current"] == 0), 0, data["voltage"].div(data["current"], axis=0))
+    data["resistance"] = np.where(
+        (data["current"] == 0), 0, data["voltage"].div(data["current"], axis=0)
+    )
 
     # Calculating derivatives and statictics
     if cols_to_calc is None:
-        cols_to_calc = ["current", "voltage", "active_power", "frequency", "electricity_gage", "motor_load", "pump_temperature"]
+        cols_to_calc = [
+            "current",
+            "voltage",
+            "active_power",
+            "frequency",
+            "electricity_gage",
+            "motor_load",
+            "pump_temperature",
+        ]
 
     for col in cols_to_calc:
         data[f"{col}_deriv"] = pd.Series(np.gradient(data[col]), data.index)
-        data[f"{col}_rol_mean"] = data[col].rolling(min_periods=1, window=60*14*3).mean()
-        data[f"{col}_rol_std"] = data[col].rolling(min_periods=1, window=60*14*3).std()
-        data[f"{col}_rol_max"] = data[col].rolling(min_periods=1, window=60*14*3).max()
-        data[f"{col}_rol_min"] = data[col].rolling(min_periods=1, window=60*14*3).min()
-        data[f"{col}_spk"] = np.where((data[f"{col}_rol_mean"] == 0), 0, data[col]/data[f"{col}_rol_mean"])
+        data[f"{col}_rol_mean"] = (
+            data[col].rolling(min_periods=1, window=60 * 14 * 3).mean()
+        )
+        data[f"{col}_rol_std"] = (
+            data[col].rolling(min_periods=1, window=60 * 14 * 3).std()
+        )
+        data[f"{col}_rol_max"] = (
+            data[col].rolling(min_periods=1, window=60 * 14 * 3).max()
+        )
+        data[f"{col}_rol_min"] = (
+            data[col].rolling(min_periods=1, window=60 * 14 * 3).min()
+        )
+        data[f"{col}_spk"] = np.where(
+            (data[f"{col}_rol_mean"] == 0), 0, data[col] / data[f"{col}_rol_mean"]
+        )
         data[col] = data[col].rolling(min_periods=1, window=30).mean()
 
-    cols_to_drop = ["reagent_rate", "oil_rate", "gas_rate", "motor_temperature", *voltage_names, *current_names]
+    cols_to_drop = [
+        "reagent_rate",
+        "oil_rate",
+        "gas_rate",
+        "motor_temperature",
+        *voltage_names,
+        *current_names,
+    ]
     cols_to_drop = [col for col in cols_to_drop.copy() if col in initial_cols]
     # cols_to_drop = [col for col in initial_cols if col not in ["well", "event_id", "time"]]
     # cols_to_drop.extend(["voltage", "current"])
@@ -363,8 +451,9 @@ def features_calculation(data_in: pd.DataFrame, cols_to_calc=None):
     return data
 
 
-
-def check_oil_rate(data_in: pd.DataFrame, drop=False, impute=False, plot=False) -> pd.DataFrame:
+def check_oil_rate(
+    data_in: pd.DataFrame, drop=False, impute=False, plot=False
+) -> pd.DataFrame:
     """
     This function checks if oilrate higher than liquid rate.
     Depending on results we can drop oilrate column or impute liquid rate instead wrong values
@@ -380,12 +469,14 @@ def check_oil_rate(data_in: pd.DataFrame, drop=False, impute=False, plot=False) 
         oil_rate = data_out["oil_rate"]
         liquid_rate = data_out["liquid_rate"]
         wrong_values = oil_rate > liquid_rate
-        
+
         wrong_sum = wrong_values.sum()
 
         if wrong_sum > 0:
-            
-            print(f"Data has {wrong_sum} incorrect values of Oil Rate in Well {well_id}")
+
+            print(
+                f"Data has {wrong_sum} incorrect values of Oil Rate in Well {well_id}"
+            )
 
             if drop and impute:
                 raise ValueError("Both arguments True")
@@ -415,16 +506,16 @@ def check_oil_rate(data_in: pd.DataFrame, drop=False, impute=False, plot=False) 
         print(f"Well {well_id} doesn't have oil rate records")
 
 
-
 # Machines are engineered to last. If something breaks all the time, you won’t buy it, would you?
-# Because machines generally last a long time, we typically do not have many examples of failure. 
+# Because machines generally last a long time, we typically do not have many examples of failure.
 # This means the data sets we use in PM are almost always unbalanced.
+
 
 def expand_target(data_in: pd.DataFrame, target_window=7, split=False) -> pd.DataFrame:
     """
     Based on 'target_window' creates additional variable as target in advance to failure
-    For example if 'target_window'=7 -- all observations (rows) before failure in 7 days are signed as class '1' 
-    
+    For example if 'target_window'=7 -- all observations (rows) before failure in 7 days are signed as class '1'
+
     """
     data = data_in.copy()
 
@@ -435,7 +526,9 @@ def expand_target(data_in: pd.DataFrame, target_window=7, split=False) -> pd.Dat
 
     data["time"] = pd.to_datetime(data["time"])
     data = data.sort_values(by="time", ascending=True)
-    data.loc[(data["event_id"] != 0), "failure_date"] = data.loc[(data["event_id"] != 0), "time"]
+    data.loc[(data["event_id"] != 0), "failure_date"] = data.loc[
+        (data["event_id"] != 0), "time"
+    ]
     data["failure_date"] = data["failure_date"].bfill().fillna(data["time"].max())
     data["failure_date"] = pd.to_datetime(data["failure_date"])
 
@@ -444,7 +537,11 @@ def expand_target(data_in: pd.DataFrame, target_window=7, split=False) -> pd.Dat
     data.loc[data["failure_date"] == data["time"].max(), "time_to_failure"] = 999
 
     # I use window between 7 and 3 days before failure
-    data['failure_target'] = np.where(((data["time_to_failure"] <= target_window) & ((data["time_to_failure"] > 3))), 1, 0)
+    data["failure_target"] = np.where(
+        ((data["time_to_failure"] <= target_window) & ((data["time_to_failure"] > 3))),
+        1,
+        0,
+    )
     data = data.drop(["failure_date", "fail_range"], axis=1)
     # data["stable"] = np.where(((data["time_to_failure"] >= 30) & (data["time_to_failure"] <= 90)), 1, 0)
     # data = data[data["time_to_failure"] != 999]
@@ -458,11 +555,10 @@ def expand_target(data_in: pd.DataFrame, target_window=7, split=False) -> pd.Dat
     return data
 
 
-
 def join_data(list_data: list) -> pd.DataFrame:
-    """"
+    """ "
     This function joins all datasets in 'list_data' into one pd.DataFrame and splits it in train and test
-    
+
     """
     # TODO -> 1) Should be used in the common pipeline data preprocessing as last step
     # 2) Define the period where to test models
@@ -475,14 +571,16 @@ def join_data(list_data: list) -> pd.DataFrame:
     joined_df = joined_df.reset_index(drop=True)
     joined_df["time"] = pd.to_datetime(joined_df["time"])
     joined_df = joined_df.sort_values(by="time", ascending=True)
-    joined_df = pd.concat([joined_df, pd.get_dummies(joined_df["well"], prefix="Well_")], axis=1)
+    joined_df = pd.concat(
+        [joined_df, pd.get_dummies(joined_df["well"], prefix="Well_")], axis=1
+    )
     joined_df = joined_df.drop("well", axis=1)
     joined_df = joined_df.reset_index(drop=True)
-    
+
     test_df = joined_df[
         (
-            (joined_df["time"].dt.date >= pd.Timestamp(f"2021-06-01")) & 
-            (joined_df["time"].dt.date <= pd.Timestamp(f"2021-06-30"))
+            (joined_df["time"].dt.date >= pd.Timestamp(f"2021-06-01"))
+            & (joined_df["time"].dt.date <= pd.Timestamp(f"2021-06-30"))
         )
     ]
     print(f"Joined data shape : {joined_df.shape}")
