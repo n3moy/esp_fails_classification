@@ -453,7 +453,7 @@ def features_calculation(data_in: pd.DataFrame, cols_to_calc=None):
 
 def check_oil_rate(
     data_in: pd.DataFrame, drop=False, impute=False, plot=False
-) -> pd.DataFrame:
+    ) -> pd.DataFrame:
     """
     This function checks if oilrate higher than liquid rate.
     Depending on results we can drop oilrate column or impute liquid rate instead wrong values

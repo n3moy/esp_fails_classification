@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import lightgbm as lgb
 from catboost import CatBoostClassifier
+from pandas.api.types import is_datetime64_any_dtype as is_datetime
 
 import optuna
 from optuna.samplers import TPESampler
@@ -12,6 +13,27 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn import metrics
 from sklearn.model_selection import KFold, cross_val_score
 
+
+class DataPlotting:
+    pass
+
+
+def validation_split(self, input_data: pd.DataFrame, valid_size: float):
+    data = input_data.copy()
+    target_values = input_data["failure_target"].values
+    data_size = data.shape[0]
+    split_size = int(data_size * valid_size)
+    split_point = np.random.randint(0, data_size-split_size-1)
+    # Due to similarity in data between observations with '1' class, data may leak
+    # So its better to begin with '0' signal to check quality and train properly
+    check_flag = target_values[split_point] == 1
+    while check_flag:
+        split_point += 1
+        check_flag = target_values[split_point] == 1
+    val_indices = list(range(split_point, split_point + split_size))
+    val_data = data.iloc[val_indices]
+    train_data = data.iloc[~val_indices]
+    return train_data, val_data
 
 
 def cross_val(data, y_true, params=None, model='rf'):
@@ -22,16 +44,18 @@ def cross_val(data, y_true, params=None, model='rf'):
 
         cv_train, cv_test = data.iloc[train_index], data.iloc[test_index]
         y_train, y_test = y_true.iloc[train_index], y_true.iloc[test_index]
-        
+
         if model == 'lgb':
 
             cv_train_ds = lgb.Dataset(cv_train, y_train, silent=True)
             cv_test_ds = lgb.Dataset(cv_test, y_test, silent=True)
 
             if isinstance(params, dict):
-                booster = lgb.train(params, train_set=cv_train_ds, valid_sets=cv_test_ds, num_boost_round=params['num_boost_round'], early_stopping_rounds=50, verbose_eval=1000)
+                booster = lgb.train(params, train_set=cv_train_ds, valid_sets=cv_test_ds,
+                                    num_boost_round=params['num_boost_round'], early_stopping_rounds=50,
+                                    verbose_eval=1000)
             else:
-                booster = lgb.train({'objective':'classification'}, train_set=cv_train_ds, verbose_eval=1000)
+                booster = lgb.train({'objective': 'classification'}, train_set=cv_train_ds, verbose_eval=1000)
             train_preds = booster.predict(cv_train)
             val_preds = booster.predict(cv_test)
 
@@ -46,7 +70,6 @@ def cross_val(data, y_true, params=None, model='rf'):
             val_preds = ct.predict(cv_test)
 
         if model == 'rf':
-
             rf = RandomForestClassifier(random_state=42)
             rf.fit(cv_train, y_train)
             train_preds = rf.predict(cv_train)
@@ -64,7 +87,6 @@ def cross_val(data, y_true, params=None, model='rf'):
 
 
 def objective(trial, X_train, y_train, model: str) -> float:
-
     if model == "lgb":
         params = {
             'objective': 'regression',
@@ -103,7 +125,7 @@ def objective(trial, X_train, y_train, model: str) -> float:
     return val_mae
 
 
-def train_model(algo: str, X_train: pd.DataFrame, X_val: pd.DataFrame, y_train: pd.Series, y_val: pd.Series):
+def train_model(algo: str, x_train: pd.DataFrame, x_val: pd.DataFrame, y_train: pd.Series, y_val: pd.Series):
     """
     This function is designed to
     
@@ -114,28 +136,19 @@ def optimize_cat():
     pass
 
 
-#TODO Ебнуть кластеризацию по параметрам и посмотреть разницу по поломкам
-
-def clusterization():
-    pass
-
-
-
-def evaluate_model(alg, train, target, predictors,  early_stopping_rounds=1):
-    
-   
-    #Fit the algorithm on the data
+def evaluate_model(alg, train, target, predictors, early_stopping_rounds=1):
+    # Fit the algorithm on the data
     alg.fit(train[predictors], target['FAILURE_TARGET'], eval_metric='auc')
-        
-    #Predict training set:
+
+    # Predict training set:
     dtrain_predictions = alg.predict(train[predictors])
-    dtrain_predprob = alg.predict_proba(train[predictors])[:,1]
-    
-    feat_imp = pd.Series(alg.get_booster().get_fscore()).sort_values(ascending=False) 
-    feat_imp.plot(kind='bar', title='Feature Importance', color='g') 
+    dtrain_predprob = alg.predict_proba(train[predictors])[:, 1]
+
+    feat_imp = pd.Series(alg.get_booster().get_fscore()).sort_values(ascending=False)
+    feat_imp.plot(kind='bar', title='Feature Importance', color='g')
     plt.ylabel('Feature Importance Score')
-        
-    #Print model report:
+
+    # Print model report:
     print("\nModel Report")
     print("Accuracy : %.4g" % metrics.accuracy_score(target['FAILURE_TARGET'].values, dtrain_predictions))
     print("AUC Score (Balanced): %f" % metrics.roc_auc_score(target['FAILURE_TARGET'], dtrain_predprob))
@@ -152,7 +165,7 @@ def evaluate_results(y_true, y_preds):
         print(f"{name} --- {m(y_true, y_preds)}")
 
 
-def evaluate_results2(data_in: pd.DataFrame, forecast_window: int=14) -> pd.DataFrame:
+def evaluate_results2(data_in: pd.DataFrame, forecast_window: int = 14) -> pd.DataFrame:
     data = data_in.copy()
     cols = data.columns
 
@@ -170,13 +183,13 @@ def evaluate_results2(data_in: pd.DataFrame, forecast_window: int=14) -> pd.Data
 
     # if a signal has occured in the last 14 days, the signal is 0.
     data['Y_FAILZ'] = np.where((data.Y_FAIL_sumxx > 1), 0, data.predicted)
-    #sort the data by id and date.
+    # sort the data by id and date.
     data = data.sort_values(by=["time"], ascending=[True])
 
-    #create signal id with the cumsum function.
+    # create signal id with the cumsum function.
     data['SIGNAL_ID'] = data['Y_FAILZ'].cumsum()
     df_signals = data[data['Y_FAILZ'] == 1].copy()
-    df_signal_date = df_signals[['SIGNAL_ID','time']].copy()
+    df_signal_date = df_signals[['SIGNAL_ID', 'time']].copy()
     df_signal_date = df_signal_date.rename(index=str, columns={"time": "SIGNAL_DATE"})
     data = data.merge(df_signal_date, on=['SIGNAL_ID'], how='outer')
 
@@ -188,19 +201,20 @@ def evaluate_results2(data_in: pd.DataFrame, forecast_window: int=14) -> pd.Data
     data["FACT_FAIL_sumxx"] = (data["true_failure"].rolling(min_periods=1, window=forecast_window).sum())
 
     # if a signal has occured in the last 90 days, the signal is 0.
-    data['actual_failure'] = np.where((data.FACT_FAIL_sumxx>1), 0, data.true_failure)
+    data['actual_failure'] = np.where((data.FACT_FAIL_sumxx > 1), 0, data.true_failure)
 
     # define a true positive
-    data['TRUE_POSITIVE'] = np.where(((data.actual_failure == 1) & (data.WARNING<=forecast_window) & (data.WARNING>=0)), 1, 0)
+    data['TRUE_POSITIVE'] = np.where(
+        ((data.actual_failure == 1) & (data.WARNING <= forecast_window) & (data.WARNING >= 0)), 1, 0)
     # define a false negative
-    data['FALSE_NEGATIVE'] = np.where((data.TRUE_POSITIVE==0) & (data.actual_failure==1), 1, 0)
+    data['FALSE_NEGATIVE'] = np.where((data.TRUE_POSITIVE == 0) & (data.actual_failure == 1), 1, 0)
     # define a false positive
-    data['BAD_S'] = np.where((data.WARNING<0) | (data.WARNING>=forecast_window), 1, 0)
-    data['FALSE_POSITIVE'] = np.where(((data.Y_FAILZ == 1) & (data.BAD_S==1)), 1, 0)
-    data['bootie']=1
-    data['CATEGORY'] = np.where((data.FALSE_POSITIVE==1),'FALSE_POSITIVE',
-                                        (np.where((data.FALSE_NEGATIVE==1),'FALSE_NEGATIVE',
-                                                    (np.where((data.TRUE_POSITIVE==1),'TRUE_POSITIVE','TRUE_NEGATIVE')))))
+    data['BAD_S'] = np.where((data.WARNING < 0) | (data.WARNING >= forecast_window), 1, 0)
+    data['FALSE_POSITIVE'] = np.where(((data.Y_FAILZ == 1) & (data.BAD_S == 1)), 1, 0)
+    data['bootie'] = 1
+    data['CATEGORY'] = np.where((data.FALSE_POSITIVE == 1), 'FALSE_POSITIVE',
+                                (np.where((data.FALSE_NEGATIVE == 1), 'FALSE_NEGATIVE',
+                                          (np.where((data.TRUE_POSITIVE == 1), 'TRUE_POSITIVE', 'TRUE_NEGATIVE')))))
     table = pd.pivot_table(data, values=['bootie'], columns=['CATEGORY'], aggfunc=np.sum)
 
     return table, data
@@ -215,19 +229,18 @@ def plot_signals(data_list: list):
         signal_dates = data[data['TRUE_POSITIVE'] == 1]["time"].values
         failure_dates = data[data["actual_failure"] == 1]["time"].values
 
-        plt.subplot(2, 2, i+1)
+        plt.subplot(2, 2, i + 1)
         plt.plot(data["time"], data["current"], label="Current")
 
         for signal_date in signal_dates:
-            plt.axvline(signal_date, 0 , data["current"].max(), c="g", label="SIGNAL")
+            plt.axvline(signal_date, 0, data["current"].max(), c="g", label="SIGNAL")
 
         for failure_date in failure_dates:
-            plt.axvline(failure_date, 0 , data["current"].max(), c="r", label="FAILURE", alpha=0.75)
+            plt.axvline(failure_date, 0, data["current"].max(), c="r", label="FAILURE", alpha=0.75)
 
         # plt.legend()
-        plt.title(f"Current in Well #{i+1}")
+        plt.title(f"Current in Well #{i + 1}")
         plt.xlabel("DATE")
         plt.ylabel("CURRENT, A")
 
     plt.show()
-
