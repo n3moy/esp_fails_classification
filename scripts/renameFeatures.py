@@ -265,7 +265,49 @@ def get_data_summary2(data_in: pd.DataFrame):
         summary.loc[col] = [total_rows, nan_rows, zero_rows, duplicates, unique_values, mean_value, mean_shift]
     
     return summary
-        
+
+
+def get_data_summary3(well_id: int, input_path: str, joined_path: str) -> pd.DataFrame:
+    all_names = os.listdir(input_path + "\\" + str(well_id))
+    road = input_path + "\\" + str(well_id)
+
+    summary_cols = ["total_rows", "nan_rows", "zero_rows", "duplicates", "unique_values", "mean_value", "mean_shift"]
+    raw_data = pd.DataFrame(columns=summary_cols)
+
+    for file_name in all_names:
+
+        file_path = os.path.join(road, file_name)
+        file_csv = pd.read_csv(file_path, parse_dates=["time"])
+        file_csv = file_csv.sort_values(by="time")
+        file_csv = file_csv.set_index("time")
+
+        data_cols = file_csv.columns
+        df = pd.DataFrame(index=data_cols, columns=summary_cols)
+
+        total_rows = file_csv.shape[0]
+        file_csv = file_csv[data_cols[0]]
+
+        nan_rows = file_csv.isna().sum()
+        zero_rows = total_rows - np.count_nonzero(file_csv)
+        unique_values = file_csv.nunique()
+        mean_value = file_csv.mean()
+        diffs = file_csv.index.to_series().diff()
+        mean_shift = diffs.mean()
+        file_csv = file_csv.drop_duplicates()
+        duplicates = total_rows - file_csv.shape[0]
+
+        df.loc[data_cols[0]] = [total_rows, nan_rows, zero_rows, duplicates, unique_values, mean_value, mean_shift]
+        raw_data = pd.concat([raw_data, df], axis=0)
+
+    road_joined_data =  joined_path + "\\joined_data_{}.csv".format(well_id)
+    data_join = pd.read_csv(road_joined_data, parse_dates=["time"])
+    data_join = data_join.set_index("time")
+    summary = get_data_summary2(data_join)
+
+    s1 = raw_data.set_index(raw_data.groupby(level=0).cumcount(), append=True)  
+    s2 = summary.set_index(summary.groupby(level=0).cumcount(), append=True)
+    
+    return pd.concat([s2,s1],1).reset_index(level=1,drop=True)
 
 
 
