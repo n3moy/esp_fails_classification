@@ -356,7 +356,6 @@ def del_z_outliers(data_in: pd.DataFrame) -> pd.DataFrame:
 
 
 # TODO -> Donot remove the correlated fetures but use PCA to get only one out of them for each highly correlated group
-# TODO -> Обработка сигналов, какие преобразования еще можно ебнуть для токов
 def features_calculation(data_in: pd.DataFrame, cols_to_calc=None):
     """ "
     Calculating unbalances, differentiables, statistics of operating parameters as new features
